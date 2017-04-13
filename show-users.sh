@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 #   Copyright Hari Sekhon 2007
 #
@@ -19,7 +19,11 @@
 
 # Nagios Plugin to list all currently logged on users to a system.
 
-version=0.2
+# Modified by Rob MacKenzie, SFU - rmackenz@sfu.ca
+# Added the -w and -c options to check for number of users.
+
+
+version=0.3
 
 # This makes coding much safer as a varible typo is caught 
 # with an error rather than passing through
@@ -44,13 +48,13 @@ usage(){
     echo "   -m username, --mandatory username"
     echo "                Mandatory users. Return CRITICAL if any of these users are not"
     echo "                currently logged in"
-    echo "   -u username, --unauthorized username"
+    echo "   -b username, --blacklist username"
     echo "                Unauthorized users. Returns CRITICAL if any of these users are"
     echo "                logged in. This can be useful if you have a policy that states"
     echo "                that you may not have a root shell but must instead only use "
     echo "                'sudo command'. Specifying '-u root' would alert on root having"
     echo "                a session and hence catch people violating such a policy."
-    echo "   -w username, --whitelist username"
+    echo "   -a username, --whitelist username"
     echo "                Whitelist users. This is exceptionally useful. If you define"
     echo "                a bunch of users here that you know you use, and suddenly"
     echo "                there is a user session open for another account it could"
@@ -61,6 +65,11 @@ usage(){
     echo "                -m,-u and -w can be specified multiple times for multiple users"
     echo "                or you can use a switch a single time with a comma separated"
     echo "                list."
+    echo "   -w integer, --warning integer"
+    echo "                Set WARNING status if more than INTEGER users are logged in"
+    echo "   -c integer, --critical integer"
+    echo "                Set CRITICAL status if more than INTEGER users are logged in"
+    echo
     echo
     echo "   -V --version Print the version number and exit"
     echo
@@ -71,17 +80,19 @@ simple=""
 mandatory_users=""
 unauthorized_users=""
 whitelist_users=""
+warning_users=0
+critical_users=0
 
 while [ "$#" -ge 1 ]; do
     case "$1" in
-        -h|--help)  usage
+-h|--help)  usage
                     ;;
-     -V|--version)  echo $version
+-V|--version)  echo $version
                     exit $UNKNOWN
                     ;;
-      -s|--simple)  simple=true
+-s|--simple)  simple=true
                     ;;
-   -m|--mandatory)  if [ "$#" -ge 2 ]; then
+-m|--mandatory)  if [ "$#" -ge 2 ]; then
                         if [ -n "$mandatory_users" ]; then
                             mandatory_users="$mandatory_users $2"
                         else
@@ -92,7 +103,7 @@ while [ "$#" -ge 1 ]; do
                         usage
                     fi
                     ;;
--u|--unauthorized)  if [ "$#" -ge 2 ]; then
+-b|--blacklist)  if [ "$#" -ge 2 ]; then
                         if [ -n "$unauthorized_users" ]; then
                             unauthorized_users="$unauthorized_users $2"
                         else
@@ -103,11 +114,29 @@ while [ "$#" -ge 1 ]; do
                         usage
                     fi
                     ;;
-   -w|--whitelist)  if [ "$#" -ge 2 ]; then
+-a|--whitelist)  if [ "$#" -ge 2 ]; then
                         if [ -n "$whitelist_users" ]; then
                             whitelist_users="$whitelist_users $2"
                         else
                             whitelist_users="$2"
+                        fi
+                        shift
+                    else
+                        usage
+                    fi
+                    ;;
+-w|--warning)  if [ "$#" -ge 2 ]; then
+                        if [ $2 -ge 1 ]; then
+                            warning_users=$2
+                        fi
+                        shift
+                    else
+                        usage
+                    fi
+                    ;;
+-c|--critical)  if [ "$#" -ge 2 ]; then
+                        if [ $2 -ge 1 ]; then
+                            critical_users=$2
                         fi
                         shift
                     else
@@ -126,6 +155,8 @@ whitelist_users="`echo $whitelist_users | tr ',' ' '`"
 
 # Must be a list of usernames only.
 userlist="`who|grep -v "^ *$"|awk '{print $1}'|sort`"
+usercount="`who|wc -l`"
+
 errormsg=""
 exitcode=$OK
 
@@ -169,6 +200,21 @@ if [ -n "$userlist" ]; then
         done 
     fi
 
+    if [ $warning_users -ne 0 -o $critical_users -ne 0 ]; then
+	unwanted_users=`who`
+	if [ $usercount -ge $critical_users -a $critical_users -ne 0 ]; then
+	    exitcode=$CRITICAL
+	elif [ $usercount -ge $warning_users -a $warning_users -ne 0 ]; then
+	    exitcode=$WARNING
+	fi
+	OLDIFS="$IFS"
+	IFS=$'\n'
+        for user in $unwanted_users; do
+            errormsg="${errormsg} --- $user"
+        done 
+	IFS="$OLDIFS"
+    fi
+
     if [ "$simple" == "true" ]
         then
         finallist=`echo "$userlist"|uniq`
@@ -183,10 +229,10 @@ if [ "$exitcode" -eq $OK ]; then
     echo "USERS OK:" $finallist
     exit $OK
 elif [ "$exitcode" -eq $WARNING ]; then
-    echo "USERS WARNING:" $errormsg"[users: "$finallist"]"
+    echo "USERS WARNING: [users: "$finallist"]" $errormsg
     exit $WARNING
 elif [ "$exitcode" -eq $CRITICAL ]; then
-    echo "USERS CRITICAL:" $errormsg"[users: "$finallist"]"
+    echo "USERS CRITICAL: [users: "$finallist"]" $errormsg
     exit $CRITICAL
 else
     echo "USERS UNKNOWN:" $errormsg"[users: "$finallist"]"
