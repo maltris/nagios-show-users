@@ -1,7 +1,5 @@
 #!/bin/bash
 #
-#   Copyright Hari Sekhon 2007
-#
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation; either version 2 of the License, or
@@ -19,13 +17,15 @@
 
 # Nagios Plugin to list all currently logged on users to a system.
 
+# Initial version by Hari Sekhon, 2007
 # Modified by Rob MacKenzie, SFU - rmackenz@sfu.ca
 # Added the -w and -c options to check for number of users.
+# Modified by maltris - m@maltris.org
+# Cleaned up the code
 
+version=0.4
 
-version=0.3
-
-# This makes coding much safer as a varible typo is caught 
+# This makes coding much safer as a varible typo is caught
 # with an error rather than passing through
 set -u
 
@@ -87,7 +87,7 @@ while [ "$#" -ge 1 ]; do
     case "$1" in
 -h|--help)  usage
                     ;;
--V|--version)  echo $version
+-V|--version)  echo "$version"
                     exit $UNKNOWN
                     ;;
 -s|--simple)  simple=true
@@ -126,8 +126,8 @@ while [ "$#" -ge 1 ]; do
                     fi
                     ;;
 -w|--warning)  if [ "$#" -ge 2 ]; then
-                        if [ $2 -ge 1 ]; then
-                            warning_users=$2
+                        if [ "$2" -ge 1 ]; then
+                            warning_users="$2"
                         fi
                         shift
                     else
@@ -135,8 +135,8 @@ while [ "$#" -ge 1 ]; do
                     fi
                     ;;
 -c|--critical)  if [ "$#" -ge 2 ]; then
-                        if [ $2 -ge 1 ]; then
-                            critical_users=$2
+                        if [ "$2" -ge 1 ]; then
+                            critical_users="$2"
                         fi
                         shift
                     else
@@ -149,13 +149,13 @@ while [ "$#" -ge 1 ]; do
     shift
 done
 
-mandatory_users="`echo $mandatory_users | tr ',' ' '`"
-unauthorized_users="`echo $unauthorized_users | tr ',' ' '`"
-whitelist_users="`echo $whitelist_users | tr ',' ' '`"
+mandatory_users="$(echo "$mandatory_users" | tr ',' ' ')"
+unauthorized_users="$(echo "$unauthorized_users" | tr ',' ' ')"
+whitelist_users="$(echo "$whitelist_users" | tr ',' ' ')"
 
 # Must be a list of usernames only.
-userlist="`who|grep -v "^ *$"|awk '{print $1}'|sort`"
-usercount="`who|wc -l`"
+userlist="$(who|grep -v "^ *$"|awk '{print $1}'|sort)"
+usercount="$(who|wc -l)"
 
 errormsg=""
 exitcode=$OK
@@ -169,9 +169,9 @@ if [ -n "$userlist" ]; then
                 exitcode=$CRITICAL
             fi
         done
-        for user in `echo $missing_users|tr " " "\n"|sort -u`; do
+        for user in $(echo "$missing_users"|tr " " "\n"|sort -u); do
             errormsg="${errormsg}user '$user' not logged in. "
-        done 
+        done
     fi
 
     if [ -n "$unauthorized_users" ]; then
@@ -182,60 +182,60 @@ if [ -n "$userlist" ]; then
                 exitcode=$CRITICAL
             fi
         done
-        for user in `echo $blacklisted_users|tr " " "\n"|sort -u`; do
+        for user in $(echo "$blacklisted_users"|tr " " "\n"|sort -u); do
             errormsg="${errormsg}Unauthorized user '$user' is logged in! "
-        done 
+        done
     fi
 
     if [ -n "$whitelist_users" ]; then
         unwanted_users=""
-        for user in `echo "$userlist"|sort -u`; do
-            if ! echo $whitelist_users|tr " " "\n"|grep "^$user$" >/dev/null 2>&1; then
+        for user in $(echo "$userlist"|sort -u); do
+            if ! echo "$whitelist_users"|tr " " "\n"|grep "^$user$" >/dev/null 2>&1; then
                 unwanted_users="$unwanted_users $user"
-                exitcode=$CRITICAL
+                exitcode="$CRITICAL"
             fi
         done
-        for user in `echo $unwanted_users|tr " " "\n"|sort -u`; do
+        for user in $(echo "$unwanted_users"|tr " " "\n"|sort -u); do
             errormsg="${errormsg}Unauthorized user '$user' detected! "
-        done 
+        done
     fi
 
-    if [ $warning_users -ne 0 -o $critical_users -ne 0 ]; then
-	unwanted_users=`who`
-	if [ $usercount -ge $critical_users -a $critical_users -ne 0 ]; then
-	    exitcode=$CRITICAL
-	elif [ $usercount -ge $warning_users -a $warning_users -ne 0 ]; then
-	    exitcode=$WARNING
+    if [ "$warning_users" -ne 0 ] || [ "$critical_users" -ne 0 ]; then
+	unwanted_users=$(who)
+	if [ "$usercount" -ge "$critical_users" ] && [ "$critical_users" -ne 0 ]; then
+	    exitcode="$CRITICAL"
+	elif [ "$usercount" -ge "$warning_users" ] && [ "$warning_users" -ne 0 ]; then
+	    exitcode="$WARNING"
 	fi
 	OLDIFS="$IFS"
 	IFS=$'\n'
         for user in $unwanted_users; do
             errormsg="${errormsg} --- $user"
-        done 
+        done
 	IFS="$OLDIFS"
     fi
 
     if [ "$simple" == "true" ]
         then
-        finallist=`echo "$userlist"|uniq`
+        finallist=$(echo "$userlist"|uniq)
     else
-        finallist=`echo "$userlist"|uniq -c|awk '{print $2"("$1")"}'`
+        finallist=$(echo "$userlist"|uniq -c|awk '{print $2"("$1")"}')
     fi
 else
     finallist="no users logged in"
 fi
 
 if [ "$exitcode" -eq $OK ]; then
-    echo "USERS OK:" $finallist
+    echo "USERS OK: $finallist"
     exit $OK
 elif [ "$exitcode" -eq $WARNING ]; then
-    echo "USERS WARNING: [users: "$finallist"]" $errormsg
+    echo "USERS WARNING: [users: $finallist] $errormsg"
     exit $WARNING
 elif [ "$exitcode" -eq $CRITICAL ]; then
-    echo "USERS CRITICAL: [users: "$finallist"]" $errormsg
+    echo "USERS CRITICAL: [users: $finallist] $errormsg"
     exit $CRITICAL
 else
-    echo "USERS UNKNOWN:" $errormsg"[users: "$finallist"]"
+    echo "USERS UNKNOWN: $errormsg [users: $finallist]"
     exit $UNKNOWN
 fi
 
