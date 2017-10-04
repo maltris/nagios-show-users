@@ -23,11 +23,21 @@
 # Modified by maltris - m@maltris.org
 # Cleaned up the code
 
-version=0.4
+version=0.5
 
 # This makes coding much safer as a varible typo is caught
 # with an error rather than passing through
 set -u
+
+# Unset LANG, it serves the purpose of returning the same results
+# if this is run with the check_mk_agent or from the commandline
+# otherwise the "who"-command will return differently formatted dates
+#
+# With LANG=en_US.UTF-8:
+# root     pts/0        2017-10-04 16:12 (127.0.0.1)
+# With LANG not set:
+# root     pts/0        Oct  4 16:12 (127.0.0.1)
+unset LANG
 
 # Note: resisted urge to use <<<, instead sticking with |
 # in case anyone uses this with an older version of bash
@@ -154,7 +164,7 @@ unauthorized_users="$(echo "$unauthorized_users" | tr ',' ' ')"
 whitelist_users="$(echo "$whitelist_users" | tr ',' ' ')"
 
 # Must be a list of usernames only.
-userlist="$(who|grep -v "^ *$"|awk '{print $1}'|sort)"
+userlist="$(who --ips|awk '{print $1" "$6}'|sort)"
 usercount="$(who|wc -l)"
 
 errormsg=""
@@ -215,11 +225,10 @@ if [ -n "$userlist" ]; then
 	IFS="$OLDIFS"
     fi
 
-    if [ "$simple" == "true" ]
-        then
+    if [ "$simple" == "true" ]; then
         finallist=$(echo "$userlist"|uniq)
     else
-        finallist=$(echo "$userlist"|uniq -c|awk '{print $2"("$1")"}')
+        finallist=$(echo "$userlist"|uniq -c|awk '{print $2" "$3" ("$1")"}' | sed ':a;N;$!ba;s/\n/, /g')
     fi
 else
     finallist="no users logged in"
