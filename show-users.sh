@@ -23,7 +23,7 @@
 # Modified by maltris - m@maltris.org
 # Cleaned up the code
 
-version=0.5
+version=0.6
 
 # This makes coding much safer as a varible typo is caught
 # with an error rather than passing through
@@ -179,7 +179,7 @@ if [ -n "$userlist" ]; then
                 exitcode=$CRITICAL
             fi
         done
-        for user in $(echo "$missing_users"|tr " " "\n"|sort -u); do
+        for user in $(echo "$missing_users"|tr " " "\\n"|sort -u); do
             errormsg="${errormsg}user '$user' not logged in. "
         done
     fi
@@ -192,7 +192,7 @@ if [ -n "$userlist" ]; then
                 exitcode=$CRITICAL
             fi
         done
-        for user in $(echo "$blacklisted_users"|tr " " "\n"|sort -u); do
+        for user in $(echo "$blacklisted_users"|tr " " "\\n"|sort -u); do
             errormsg="${errormsg}Unauthorized user '$user' is logged in! "
         done
     fi
@@ -200,12 +200,12 @@ if [ -n "$userlist" ]; then
     if [ -n "$whitelist_users" ]; then
         unwanted_users=""
         for user in $(echo "$userlist"|sort -u); do
-            if ! echo "$whitelist_users"|tr " " "\n"|grep "^$user$" >/dev/null 2>&1; then
+            if ! echo "$whitelist_users"|tr " " "\\n"|grep "^$user$" >/dev/null 2>&1; then
                 unwanted_users="$unwanted_users $user"
                 exitcode="$CRITICAL"
             fi
         done
-        for user in $(echo "$unwanted_users"|tr " " "\n"|sort -u); do
+        for user in $(echo "$unwanted_users"|tr " " "\\n"|sort -u); do
             errormsg="${errormsg}Unauthorized user '$user' detected! "
         done
     fi
